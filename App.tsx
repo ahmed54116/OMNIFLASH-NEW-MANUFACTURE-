@@ -25,6 +25,31 @@ import {
 const BATCH_SIZE = 2;
 const CLIP_DURATIONS: ClipDuration[] = [4, 5, 8];
 
+export const parseCustomSplitJsonToChunks = (jsonString: string): string[] => {
+  if (!jsonString || !jsonString.trim()) return [];
+  try {
+    let parsed = JSON.parse(jsonString);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      if (Array.isArray(parsed.segments)) parsed = parsed.segments;
+      else if (Array.isArray(parsed.chunks)) parsed = parsed.chunks;
+      else if (Array.isArray(parsed.words)) parsed = parsed.words;
+      else if (Array.isArray(parsed.results)) parsed = parsed.results;
+      else if (Array.isArray(parsed.data)) parsed = parsed.data;
+    }
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.map((item: any) => {
+      if (typeof item === 'string') return item;
+      const text = item.text || item.script || item.chunk || item.line || item.content || item.word || item.sentence || '';
+      if (!text) return JSON.stringify(item);
+      const timestamp = item.timestamp ?? item.start ?? item.time ?? item.start_time;
+      return timestamp !== undefined ? `[${timestamp}] ${text}` : text;
+    }).filter(c => c && c.trim().length > 0);
+  } catch (e) {
+    return [];
+  }
+};
+
 const App: React.FC = () => {
   const [viewTab, setViewTab] = useState<'script' | 'characters' | 'continuity' | 'manufacturing'>('script');
   /*
@@ -134,23 +159,27 @@ const App: React.FC = () => {
   const stopGenerationRef = useRef(false);
   const sessionStartTimeRef = useRef<number | null>(null);
 
-  let parsedCustomChunksLength = 0;
-  if (customSplitJson.trim()) {
-    try {
-      const parsed = JSON.parse(customSplitJson);
-      if (Array.isArray(parsed)) {
-        parsedCustomChunksLength = parsed.length;
-      } else if (parsed && typeof parsed === 'object' && Array.isArray(parsed.segments)) {
-        parsedCustomChunksLength = parsed.segments.length;
-      }
-    } catch(e) {}
-  }
+  const customChunks = parseCustomSplitJsonToChunks(customSplitJson);
+  const parsedCustomChunksLength = customChunks.length;
   const wordCount = script.trim() ? script.trim().split(/\s+/).length : (customSplitJson.trim() ? customSplitJson.split(/\s+/).length : 0);
   const estimatedDurationMinutes = wordCount / 150;
-  const estimatedClipCount = scriptChunks.length > 0 ? scriptChunks.length : (parsedCustomChunksLength > 0 ? parsedCustomChunksLength : Math.ceil((estimatedDurationMinutes * 60) / clipDuration));
+  const estimatedClipCount = parsedCustomChunksLength > 0 
+    ? parsedCustomChunksLength 
+    : (scriptChunks.length > 0 ? scriptChunks.length : Math.ceil((estimatedDurationMinutes * 60) / clipDuration));
   const metrics: ScriptMetrics = { wordCount, estimatedDurationMinutes, estimatedClipCount };
 
-    useEffect(() => { storage.setItem(`veo_main_script`, script); }, [script, 'standard']);
+  // Automatically sync scriptChunks when customSplitJson is present
+  useEffect(() => {
+    if (customSplitJson.trim()) {
+      const chunks = parseCustomSplitJsonToChunks(customSplitJson);
+      if (chunks.length > 0 && chunks.length !== scriptChunks.length) {
+        setScriptChunks(chunks);
+        setIsAnalysisComplete(true);
+      }
+    }
+  }, [customSplitJson]);
+
+  useEffect(() => { storage.setItem(`veo_main_script`, script); }, [script, 'standard']);
   useEffect(() => { storage.setItem(`veo_main_customSplitJson`, customSplitJson); }, [customSplitJson, 'standard']);
   useEffect(() => { storage.setItem(`veo_main_settings`, JSON.stringify(settings)); }, [settings, 'standard']);
   useEffect(() => { storage.setItem(`veo_main_clipDuration`, String(clipDuration)); }, [clipDuration, 'standard']);
@@ -310,25 +339,16 @@ const App: React.FC = () => {
     
     // 2. Restore or reconstruct script chunks
     let restoredChunks: string[] = [];
-    if (Array.isArray(data.scriptChunks) && data.scriptChunks.length > 0) {
+    if (data.customSplitJson && data.customSplitJson.trim()) {
+      restoredChunks = parseCustomSplitJsonToChunks(data.customSplitJson);
+    }
+    if (restoredChunks.length === 0 && Array.isArray(data.scriptChunks) && data.scriptChunks.length > 0) {
       restoredChunks = data.scriptChunks;
-    } else if (data.customSplitJson && data.customSplitJson.trim()) {
-      try {
-        let parsed = JSON.parse(data.customSplitJson);
-        if (parsed && typeof parsed === 'object' && Array.isArray(parsed.segments)) {
-          parsed = parsed.segments;
-        }
-        if (Array.isArray(parsed)) {
-          restoredChunks = parsed.map((item: any) => {
-            if (typeof item === 'string') return item;
-            const text = item.text || item.script || item.chunk || item.line || item.content;
-            if (!text) return JSON.stringify(item);
-            const timestamp = item.timestamp ?? item.start ?? item.time;
-            return timestamp !== undefined ? `[${timestamp}] ${text}` : text;
-          });
-        }
-      } catch (e) {}
-    } else if (Array.isArray(data.clips) && data.clips.length > 0) {
+    }
+    if (restoredChunks.length === 0 && data.script && data.script.trim()) {
+      // Estimate if needed
+    }
+    if (restoredChunks.length === 0 && Array.isArray(data.clips) && data.clips.length > 0) {
       restoredChunks = data.clips.map((c: any) => c.scriptLine || c.narrativeContext || '');
     }
 
@@ -533,25 +553,10 @@ const App: React.FC = () => {
     setErrorMsg(null);
     try {
       // Step 1: Split chunks
-      let chunks = [];
+      let chunks: string[] = [];
       if (customSplitJson.trim()) {
-        try {
-          let parsed = JSON.parse(customSplitJson);
-          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Array.isArray(parsed.segments)) {
-            parsed = parsed.segments;
-          }
-          if (!Array.isArray(parsed)) throw new Error("Custom JSON must be an array of objects or contain a 'segments' array.");
-          chunks = parsed.map(item => {
-            if (typeof item === 'string') return item;
-            const text = item.text || item.script || item.chunk || item.line || item.content;
-            if (!text) return JSON.stringify(item);
-            const timestamp = item.timestamp ?? item.start ?? item.time;
-            return timestamp !== undefined ? `[${timestamp}] ${text}` : text;
-          });
-          if (chunks.length === 0) throw new Error("Custom JSON array is empty.");
-        } catch (e) {
-          throw new Error("Invalid Custom Split JSON: " + e.message);
-        }
+        chunks = parseCustomSplitJsonToChunks(customSplitJson);
+        if (chunks.length === 0) throw new Error("Custom JSON array is empty or could not be parsed.");
       } else {
         chunks = await geminiService.splitScriptToChunks(script, clipDuration, 'standard');
       }
@@ -1181,17 +1186,37 @@ const App: React.FC = () => {
                         </div>
                       )}
 
-                      <button
-                        onClick={() => {
-                          setCurrentStep(2);
-                          if (clips.length === 0 && status === GenerationStatus.IDLE) {
-                            handleInitialGenerate();
-                          }
-                        }}
-                        className="w-full py-3 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-all shadow-lg shadow-teal-900/30"
-                      >
-                        Generate Production Prompts <ArrowRight size={18} />
-                      </button>
+                      {clips.length > 0 && clips.length < (scriptChunks.length || metrics.estimatedClipCount) ? (
+                        <div className="space-y-3 pt-2">
+                          <button
+                            onClick={() => {
+                              setCurrentStep(2);
+                              handleResume();
+                            }}
+                            className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-all shadow-xl shadow-emerald-900/40 transform hover:scale-[1.01]"
+                          >
+                            <Play size={18} fill="currentColor" /> Continue from Prompt #{clips.length + 1} of {scriptChunks.length || metrics.estimatedClipCount}
+                          </button>
+                          <button
+                            onClick={() => setCurrentStep(2)}
+                            className="w-full py-2.5 bg-[#1e293b] hover:bg-[#334155] text-gray-300 hover:text-white border border-gray-700 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2"
+                          >
+                            View {clips.length} Completed Prompts <ArrowRight size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setCurrentStep(2);
+                            if (clips.length === 0 && status === GenerationStatus.IDLE) {
+                              handleInitialGenerate();
+                            }
+                          }}
+                          className="w-full py-3 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-all shadow-lg shadow-teal-900/30"
+                        >
+                          {clips.length > 0 ? `View ${clips.length} Generated Prompts` : "Generate Production Prompts"} <ArrowRight size={18} />
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
