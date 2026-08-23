@@ -10,7 +10,7 @@ import {
 import { manufacturingCompiler } from './manufacturingCompiler';
 
 export const getAIClient = () => {
-  return new GoogleGenAI({});
+  return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
 // ============================================================

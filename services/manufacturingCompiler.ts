@@ -28,7 +28,7 @@ const computeContentHash = (text: string): string => {
 };
 
 export const getAIClient = () => {
-  return new GoogleGenAI({});
+  return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
 // ============================================================
