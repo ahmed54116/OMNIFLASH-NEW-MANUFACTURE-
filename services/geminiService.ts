@@ -9,28 +9,7 @@ import {
 } from '../constants';
 import { manufacturingCompiler } from './manufacturingCompiler';
 
-export const getApiKey = (): string => {
-  if (typeof window !== 'undefined') {
-    const local = localStorage.getItem('veo_gemini_api_key');
-    if (local && local.trim()) return local.trim();
-    const win = window as any;
-    if (win.__GEMINI_API_KEY__) return win.__GEMINI_API_KEY__;
-    if (win.aistudio?.apiKey) return win.aistudio.apiKey;
-    if (win.process?.env?.API_KEY) return win.process.env.API_KEY;
-    if (win.process?.env?.GEMINI_API_KEY) return win.process.env.GEMINI_API_KEY;
-  }
-  if (typeof process !== 'undefined' && process.env) {
-    if (process.env.API_KEY) return process.env.API_KEY;
-    if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY;
-  }
-  return '';
-};
-
 export const getAIClient = () => {
-  const apiKey = getApiKey();
-  if (apiKey) {
-    return new GoogleGenAI({ apiKey });
-  }
   return new GoogleGenAI({});
 };
 
@@ -835,37 +814,7 @@ const generateClipBatch = async (
       }
     });
   } catch (apiErr: any) {
-    console.warn("Direct batch generation failed, attempting backend server fallback...", apiErr);
-    const isBrowser = typeof window !== 'undefined';
-    if (isBrowser) {
-      try {
-        const origin = window.location.origin;
-        const res = await fetch(`${origin}/api/gemini/generateBatch`, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            ...(getApiKey() ? { 'x-goog-api-key': getApiKey() } : {})
-          },
-          body: JSON.stringify({
-            chunks,
-            startClipNumber,
-            settings,
-            clipDuration,
-            outputFormat,
-            mode,
-            batchContext
-          })
-        });
-        if (res.ok) {
-          const backendData = await res.json();
-          if (backendData && Array.isArray(backendData.clips)) {
-            return backendData;
-          }
-        }
-      } catch (fallbackErr) {
-        console.error("Backend generateBatch fallback failed:", fallbackErr);
-      }
-    }
+    console.warn("Primary batch generation attempt failed, retrying once in 2s...", apiErr);
     // Short backoff retry if rate limited or temporarily overloaded
     await new Promise(res => setTimeout(res, 2000));
     response = await ai.models.generateContent({

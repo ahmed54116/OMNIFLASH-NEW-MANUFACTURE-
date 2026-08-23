@@ -27,28 +27,7 @@ const computeContentHash = (text: string): string => {
   return 'MFG_' + Math.abs(hash).toString(36).toUpperCase();
 };
 
-export const getApiKey = (): string => {
-  if (typeof window !== 'undefined') {
-    const local = localStorage.getItem('veo_gemini_api_key');
-    if (local && local.trim()) return local.trim();
-    const win = window as any;
-    if (win.__GEMINI_API_KEY__) return win.__GEMINI_API_KEY__;
-    if (win.aistudio?.apiKey) return win.aistudio.apiKey;
-    if (win.process?.env?.API_KEY) return win.process.env.API_KEY;
-    if (win.process?.env?.GEMINI_API_KEY) return win.process.env.GEMINI_API_KEY;
-  }
-  if (typeof process !== 'undefined' && process.env) {
-    if (process.env.API_KEY) return process.env.API_KEY;
-    if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY;
-  }
-  return '';
-};
-
 export const getAIClient = () => {
-  const apiKey = getApiKey();
-  if (apiKey) {
-    return new GoogleGenAI({ apiKey });
-  }
   return new GoogleGenAI({});
 };
 

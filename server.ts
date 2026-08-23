@@ -4,7 +4,6 @@ import cors from 'cors';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { createServer as createViteServer } from 'vite';
-import { createProxyMiddleware } from 'http-proxy-middleware';
 import 'dotenv/config';
 
 // Ensure API_KEY is available (Platform provides it as API_KEY or GEMINI_API_KEY)
@@ -20,50 +19,6 @@ async function startServer() {
   const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 
   app.use(cors());
-
-  // 1. Secure Gemini Reverse Proxy for AI Studio / Web client SDKs
-  app.use(
-    '/api/gemini/proxy',
-    createProxyMiddleware({
-      target: 'https://generativelanguage.googleapis.com',
-      changeOrigin: true,
-      pathRewrite: (pathStr, req) => {
-        const clientKey = (req.headers['x-goog-api-key'] || req.headers['authorization']) as string;
-        const serverKey = process.env.API_KEY || process.env.GEMINI_API_KEY || '';
-        const apiKey = (clientKey && clientKey !== 'AI_STUDIO_SESSION_KEY') ? clientKey : serverKey;
-        
-        let cleanPath = pathStr.replace(/^\/api\/gemini\/proxy/, '');
-        if (apiKey) {
-          if (cleanPath.includes('key=')) {
-            cleanPath = cleanPath.replace(/key=[^&]+/, `key=${encodeURIComponent(apiKey)}`);
-          } else {
-            cleanPath += (cleanPath.includes('?') ? '&' : '?') + `key=${encodeURIComponent(apiKey)}`;
-          }
-        }
-        return cleanPath;
-      },
-      on: {
-        proxyReq: (proxyReq, req: any) => {
-          const clientKey = req.headers['x-goog-api-key'] || req.headers['authorization'];
-          const serverKey = process.env.API_KEY || process.env.GEMINI_API_KEY || '';
-          const apiKey = (clientKey && clientKey !== 'AI_STUDIO_SESSION_KEY') ? clientKey : serverKey;
-          if (apiKey) {
-            proxyReq.setHeader('x-goog-api-key', apiKey);
-            if (proxyReq.path && proxyReq.path.includes('key=')) {
-              proxyReq.path = proxyReq.path.replace(/key=[^&]+/, `key=${encodeURIComponent(apiKey)}`);
-            }
-          }
-        },
-        error: (err, req, res: any) => {
-          console.error('Gemini Proxy Error:', err);
-          if (res && !res.headersSent) {
-            res.status(502).json({ error: 'Proxy error contacting Google Gemini API: ' + err.message });
-          }
-        }
-      }
-    })
-  );
-
   app.use(express.json({ limit: '50mb' }));
 
   // 2. Dedicated Backend API Endpoints (Fallback & Direct Service)
