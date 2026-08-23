@@ -1298,9 +1298,26 @@ const App: React.FC = () => {
               </div>
 
               {errorMsg && (
-                <div className="mt-4 p-4 bg-red-900/30 border border-red-800 rounded-lg text-red-200 text-sm flex items-start gap-3">
-                  <AlertCircle className="shrink-0 mt-0.5 text-red-500" size={16} />
-                  <p>{errorMsg}</p>
+                <div className="mt-4 p-4 bg-red-900/30 border border-red-800 rounded-lg text-red-200 text-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="shrink-0 mt-0.5 text-red-400" size={18} />
+                    <div>
+                      <p className="font-semibold text-red-200">
+                        {errorMsg.includes('403') || errorMsg.includes('permission') || errorMsg.includes('API key')
+                          ? "API Key Authentication / Permission Required"
+                          : "Generation Interrupted"}
+                      </p>
+                      <p className="text-xs text-red-300/80 mt-0.5 font-mono break-all">{errorMsg}</p>
+                    </div>
+                  </div>
+                  {(errorMsg.includes('403') || errorMsg.includes('permission') || errorMsg.includes('API key')) && (
+                    <button
+                      onClick={() => setIsApiKeyModalOpen(true)}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-all shadow-md flex items-center gap-1.5 whitespace-nowrap self-end sm:self-auto"
+                    >
+                      <Key size={14} /> Configure API Key
+                    </button>
+                  )}
                 </div>
               )}
 
