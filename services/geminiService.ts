@@ -26,12 +26,17 @@ export const getApiKey = (): string => {
   return '';
 };
 
-const getAIClient = () => {
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    throw new Error("Gemini API Key is missing. Ensure your Google AI Studio environment or API key is active.");
+export const getAIClient = () => {
+  const apiKey = getApiKey() || 'AI_STUDIO_SESSION_KEY';
+  const isBrowser = typeof window !== 'undefined';
+  const origin = isBrowser ? window.location.origin : 'http://localhost:3000';
+  
+  const clientOptions: any = { apiKey };
+  // If no direct key in browser, route through the secure server proxy
+  if (!getApiKey() && isBrowser) {
+    clientOptions.baseUrl = `${origin}/api/gemini/proxy`;
   }
-  return new GoogleGenAI({ apiKey });
+  return new GoogleGenAI(clientOptions);
 };
 
 // ============================================================

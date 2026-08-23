@@ -44,12 +44,17 @@ export const getApiKey = (): string => {
   return '';
 };
 
-const getAIClient = () => {
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    throw new Error("Gemini API Key is missing. Ensure your Google AI Studio environment or API key is active.");
+export const getAIClient = () => {
+  const apiKey = getApiKey() || 'AI_STUDIO_SESSION_KEY';
+  const isBrowser = typeof window !== 'undefined';
+  const origin = isBrowser ? window.location.origin : 'http://localhost:3000';
+  
+  const clientOptions: any = { apiKey };
+  // If no direct key in browser, route through the secure server proxy
+  if (!getApiKey() && isBrowser) {
+    clientOptions.baseUrl = `${origin}/api/gemini/proxy`;
   }
-  return new GoogleGenAI({ apiKey });
+  return new GoogleGenAI(clientOptions);
 };
 
 // ============================================================
@@ -259,7 +264,27 @@ OUTPUT: A structured JSON matching the provided schema exactly.`;
     const jsonStr = response.text;
     if (!jsonStr) throw new Error("Empty response from compiler");
 
-    const compiled = JSON.parse(jsonStr);
+    let compiled;
+    try {
+      if (jsonStr.trim().startsWith('<')) {
+        throw new Error("HTML response received from proxy");
+      }
+      compiled = JSON.parse(jsonStr);
+    } catch (parseErr) {
+      // Fallback: try calling the server endpoint directly
+      if (typeof window !== 'undefined') {
+        const backendRes = await fetch('/api/gemini/compileReference', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ manufacturingJson: rawJson })
+        });
+        if (backendRes.ok) {
+          const resData = await backendRes.json();
+          if (resData.referenceIndex) return resData.referenceIndex;
+        }
+      }
+      throw parseErr;
+    }
 
     // Attach metadata
     const index: ManufacturingReferenceIndex = {
@@ -271,7 +296,22 @@ OUTPUT: A structured JSON matching the provided schema exactly.`;
 
     return index;
   } catch (error) {
-    console.error("Manufacturing Reference Compiler Error:", error);
+    console.error("Manufacturing Reference Compiler Error, trying backend fallback:", error);
+    if (typeof window !== 'undefined') {
+      try {
+        const backendRes = await fetch('/api/gemini/compileReference', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ manufacturingJson: rawJson })
+        });
+        if (backendRes.ok) {
+          const resData = await backendRes.json();
+          if (resData.referenceIndex) return resData.referenceIndex;
+        }
+      } catch (fallbackErr) {
+        console.error("Backend compileReference fallback failed:", fallbackErr);
+      }
+    }
     throw new Error("Failed to compile Manufacturing JSON: " + (error as Error).message);
   }
 };
