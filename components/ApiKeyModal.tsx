@@ -35,8 +35,8 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onKey
       return;
     }
 
-    if (!trimmed.startsWith('AIzaSy') && trimmed.length < 20) {
-      setStatusMessage('Warning: That does not look like a standard Google Gemini API key.');
+    if (trimmed.length < 15) {
+      setStatusMessage('Warning: Please ensure you entered the complete API key.');
     }
 
     localStorage.setItem('veo_gemini_api_key', trimmed);
