@@ -7,6 +7,7 @@ import { MetricsDisplay } from './components/MetricsDisplay';
 import { PromptCard } from './components/PromptCard';
 import { ExportActions } from './components/ExportActions';
 import { ProjectImportModal } from './components/ProjectImportModal';
+import { ApiKeyModal } from './components/ApiKeyModal';
 import { TokenOptimizationHUD } from './components/TokenOptimizationHUD';
 import { ScenePacketInspector } from './components/ScenePacketInspector';
 import { geminiService } from './services/geminiService';
@@ -20,7 +21,7 @@ import {
   Sparkles, Users, Play, Pause, AlertCircle, Video, Loader2, CheckCircle, 
   RotateCcw, ArrowDownCircle, Clock, Download, Upload, FileJson, 
   FileText, Search, UserCheck, ArrowRight, ArrowLeft, Check, Settings 
-, Database } from 'lucide-react';
+, Database, Key } from 'lucide-react';
 
 const BATCH_SIZE = 2;
 const CLIP_DURATIONS: ClipDuration[] = [4, 5, 8];
@@ -112,6 +113,7 @@ const App: React.FC = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
   const [showToast, setShowToast] = useState<string | null>(null);
   const [alertDialog, setAlertDialog] = useState({ isOpen: false, title: '', message: '' });
 
@@ -781,24 +783,31 @@ const App: React.FC = () => {
               <p className="text-xs text-blue-400 font-medium">ELITE EDITION 2.0</p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 items-center">
+            <button
+              onClick={() => setIsApiKeyModalOpen(true)}
+              className="px-3.5 py-2 bg-blue-950/40 hover:bg-blue-900/50 border border-blue-500/40 text-blue-300 rounded-lg text-sm font-bold transition-all flex items-center gap-1.5 shadow-sm"
+              title="Configure or override your Google Gemini API Key"
+            >
+              <Key size={15} className="text-blue-400" /> API Key
+            </button>
             <button
               onClick={() => setIsImportModalOpen(true)}
-              className="px-4 py-2 bg-[#1e293b] hover:bg-[#334155] border border-gray-700 rounded-lg text-sm font-bold transition-all flex items-center gap-2"
+              className="px-3.5 py-2 bg-[#1e293b] hover:bg-[#334155] border border-gray-700 rounded-lg text-sm font-bold transition-all flex items-center gap-1.5"
             >
-              <Upload size={16} /> Import
+              <Upload size={15} /> Import
             </button>
             <button
               onClick={handleExportProject}
-              className="px-4 py-2 bg-[#1e293b] hover:bg-[#334155] border border-gray-700 rounded-lg text-sm font-bold transition-all flex items-center gap-2 text-blue-400"
+              className="px-3.5 py-2 bg-[#1e293b] hover:bg-[#334155] border border-gray-700 rounded-lg text-sm font-bold transition-all flex items-center gap-1.5 text-blue-400"
             >
-              <Download size={16} /> Export Project
+              <Download size={15} /> Export Project
             </button>
             <button
               onClick={handleClearProject}
-              className="px-4 py-2 bg-red-900/30 hover:bg-red-900/50 text-red-400 border border-red-900/50 rounded-lg text-sm font-bold transition-all flex items-center gap-2"
+              className="px-3.5 py-2 bg-red-900/30 hover:bg-red-900/50 text-red-400 border border-red-900/50 rounded-lg text-sm font-bold transition-all flex items-center gap-1.5"
             >
-              <RotateCcw size={16} /> Clear
+              <RotateCcw size={15} /> Clear
             </button>
           </div>
         </div>
@@ -1390,6 +1399,14 @@ const App: React.FC = () => {
       </main>
 
       {/* Modals & Dialogs */}
+      {isApiKeyModalOpen && (
+        <ApiKeyModal 
+          isOpen={isApiKeyModalOpen}
+          onClose={() => setIsApiKeyModalOpen(false)}
+          onKeySaved={(k) => setShowToast(k ? 'Custom Gemini API Key saved!' : 'Using AI Studio default key')}
+        />
+      )}
+
       {isImportModalOpen && (
         <ProjectImportModal 
           isOpen={isImportModalOpen}

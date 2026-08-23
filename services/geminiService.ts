@@ -840,7 +840,37 @@ const generateClipBatch = async (
       }
     });
   } catch (apiErr: any) {
-    console.warn("Primary batch generation attempt failed, retrying once in 2s...", apiErr);
+    console.warn("Direct batch generation failed, attempting backend server fallback...", apiErr);
+    const isBrowser = typeof window !== 'undefined';
+    if (isBrowser) {
+      try {
+        const origin = window.location.origin;
+        const res = await fetch(`${origin}/api/gemini/generateBatch`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            ...(getApiKey() ? { 'x-goog-api-key': getApiKey() } : {})
+          },
+          body: JSON.stringify({
+            chunks,
+            startClipNumber,
+            settings,
+            clipDuration,
+            outputFormat,
+            mode,
+            batchContext
+          })
+        });
+        if (res.ok) {
+          const backendData = await res.json();
+          if (backendData && Array.isArray(backendData.clips)) {
+            return backendData;
+          }
+        }
+      } catch (fallbackErr) {
+        console.error("Backend generateBatch fallback failed:", fallbackErr);
+      }
+    }
     // Short backoff retry if rate limited or temporarily overloaded
     await new Promise(res => setTimeout(res, 2000));
     response = await ai.models.generateContent({

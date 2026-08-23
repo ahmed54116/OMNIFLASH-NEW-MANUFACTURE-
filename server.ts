@@ -27,14 +27,31 @@ async function startServer() {
     createProxyMiddleware({
       target: 'https://generativelanguage.googleapis.com',
       changeOrigin: true,
-      pathRewrite: {
-        '^/api/gemini/proxy': '',
+      pathRewrite: (pathStr, req) => {
+        const clientKey = (req.headers['x-goog-api-key'] || req.headers['authorization']) as string;
+        const serverKey = process.env.API_KEY || process.env.GEMINI_API_KEY || '';
+        const apiKey = (clientKey && clientKey !== 'AI_STUDIO_SESSION_KEY') ? clientKey : serverKey;
+        
+        let cleanPath = pathStr.replace(/^\/api\/gemini\/proxy/, '');
+        if (apiKey) {
+          if (cleanPath.includes('key=')) {
+            cleanPath = cleanPath.replace(/key=[^&]+/, `key=${encodeURIComponent(apiKey)}`);
+          } else {
+            cleanPath += (cleanPath.includes('?') ? '&' : '?') + `key=${encodeURIComponent(apiKey)}`;
+          }
+        }
+        return cleanPath;
       },
       on: {
-        proxyReq: (proxyReq) => {
-          const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY || '';
+        proxyReq: (proxyReq, req: any) => {
+          const clientKey = req.headers['x-goog-api-key'] || req.headers['authorization'];
+          const serverKey = process.env.API_KEY || process.env.GEMINI_API_KEY || '';
+          const apiKey = (clientKey && clientKey !== 'AI_STUDIO_SESSION_KEY') ? clientKey : serverKey;
           if (apiKey) {
             proxyReq.setHeader('x-goog-api-key', apiKey);
+            if (proxyReq.path && proxyReq.path.includes('key=')) {
+              proxyReq.path = proxyReq.path.replace(/key=[^&]+/, `key=${encodeURIComponent(apiKey)}`);
+            }
           }
         },
         error: (err, req, res: any) => {
