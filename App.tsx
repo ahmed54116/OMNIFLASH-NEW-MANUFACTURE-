@@ -9,7 +9,7 @@ import { ExportActions } from './components/ExportActions';
 import { ProjectImportModal } from './components/ProjectImportModal';
 import { TokenOptimizationHUD } from './components/TokenOptimizationHUD';
 import { ScenePacketInspector } from './components/ScenePacketInspector';
-import { geminiService } from './services/geminiService';
+import { geminiClient } from './services/geminiClient';
 import { manufacturingCompiler } from './services/manufacturingCompiler';
 import { 
   GeneratedClip, StyleSettings, GenerationStatus, 
@@ -456,7 +456,17 @@ const App: React.FC = () => {
     if (!settings.manufacturingJson || !settings.manufacturingJson.trim()) return;
     setCompilerStatus({ state: 'compiling', message: 'Compiling Manufacturing JSON into indexed reference...', referenceIndex: null });
     try {
-      const index = await manufacturingCompiler.compileManufacturingJson(settings.manufacturingJson);
+      const res = await fetch('/api/gemini/compileReference', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ manufacturingJson: settings.manufacturingJson }),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(errData.error || `Server error ${res.status}`);
+      }
+      const data = await res.json();
+      const index = data.referenceIndex;
       setCompilerStatus({ state: 'compiled', message: `Compiled successfully — ${index.construction_stages.length} stages, ${index.visual_beats.length} beats, ${index.facility_modules.length} modules`, referenceIndex: index });
       setSettings(prev => ({ ...prev, compiledReference: index }));
       setShowToast('Manufacturing Reference compiled successfully!');
@@ -493,7 +503,7 @@ const App: React.FC = () => {
       try {
         const batchChunks = chunks.slice(i, batchEnd);
         // Pass cross-batch context
-        const result = await geminiService.generateClipBatch(
+        const result = await geminiClient.generateClipBatch(
           batchChunks, i + 1, 
           { ...generationSettings, batchContext: batchContextRef.current },
           clipDuration, outputFormat, 'standard',
@@ -535,7 +545,7 @@ const App: React.FC = () => {
     if (!script.trim()) return;
     setIsAnalyzingCast(true);
     try {
-      const chars = await geminiService.analyzeTextForCharacters(script, 'standard');
+      const chars = await geminiClient.analyzeTextForCharacters(script, 'standard');
       setSettings(prev => ({ ...prev, characters: [...prev.characters, ...chars] }));
       setHasAnalyzedCast(true);
       setShowToast(`Found ${chars.length} characters!`);
@@ -558,7 +568,7 @@ const App: React.FC = () => {
         chunks = parseCustomSplitJsonToChunks(customSplitJson);
         if (chunks.length === 0) throw new Error("Custom JSON array is empty or could not be parsed.");
       } else {
-        chunks = await geminiService.splitScriptToChunks(script, clipDuration, 'standard');
+        chunks = await geminiClient.splitScriptToChunks(script, clipDuration, 'standard');
       }
       setScriptChunks(chunks);
       
@@ -568,7 +578,7 @@ const App: React.FC = () => {
       const hasManufacturingJson = settings.manufacturingJson && settings.manufacturingJson.trim().length > 0;
       if (!hasAnalyzedCast && !hasManufacturingJson) {
         try {
-          const chars = await geminiService.analyzeTextForCharacters(scriptToAnalyze, 'standard');
+          const chars = await geminiClient.analyzeTextForCharacters(scriptToAnalyze, 'standard');
           if (chars.length > 0) {
             setSettings(prev => ({ ...prev, characters: [...prev.characters, ...chars] }));
             setHasAnalyzedCast(true);
@@ -599,7 +609,7 @@ const App: React.FC = () => {
          if (customSplitJson.trim()) {
            throw new Error("Please run Analyze Script first to parse your Custom JSON.");
          }
-         chunksToUse = await geminiService.splitScriptToChunks(script, clipDuration, 'standard');
+         chunksToUse = await geminiClient.splitScriptToChunks(script, clipDuration, 'standard');
          setScriptChunks(chunksToUse);
       }
       setClips([]);
@@ -645,7 +655,7 @@ const App: React.FC = () => {
           }
         } catch (e) {}
       } else if (script.trim()) {
-        chunksToUse = await geminiService.splitScriptToChunks(script, clipDuration, 'standard');
+        chunksToUse = await geminiClient.splitScriptToChunks(script, clipDuration, 'standard');
       }
       if (chunksToUse.length > 0) {
         setScriptChunks(chunksToUse);
@@ -679,7 +689,7 @@ const App: React.FC = () => {
     if (!originalClip) return;
     setRegeneratingIds(prev => new Set(prev).add(clipId));
     try {
-      const newClip = await geminiService.regenerateClip(originalClip, settings, feedback, outputFormat, 'standard');
+      const newClip = await geminiClient.regenerateClip(originalClip, settings, feedback, outputFormat, 'standard');
       setClips(prev => prev.map(c => c.id === clipId ? newClip : c));
       setShowToast(`Clip ${originalClip.clipNumber} regenerated!`);
     } catch (e: any) {
