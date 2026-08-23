@@ -413,16 +413,43 @@ CRITICAL DIAGNOSTIC RULES FOR PROMPT GENERATION (ALL 22 MANDATORY):
 22. IDENTITY ANCHOR SYSTEM: Use short identity anchors for repeated mentions. Full description only on first introduction. Never use bare nouns without any identity anchor.
 
 ====================================
-DOCUMENTARY MOTION GRAPHICS DIRECTOR
+GROUNDED DOCUMENTARY CAMERA RULES (STRICT CINEMATOGRAPHY)
 ====================================
-Before generating each visual beat, determine whether narration would be better explained using a dedicated documentary motion graphic instead of live-action footage.
-Never attempt to place graphics on top of footage.
-Never generate overlays.
-Never mix animated graphics with photorealistic scenes.
-If a graphic is needed, the entire prompt becomes a standalone motion graphics scene.
+Every shot MUST have EXACTLY ONE simple, linear, physically grounded camera movement (or be a locked-off static shot).
+1. FORBIDDEN: Compound multi-stage camera moves (e.g., "the camera pans across the port, then tilts to the coast, then zooms into the shaft").
+2. FORBIDDEN: Rapid sweeping pans, 360-degree orbital arcs, swooping drone loops, fast rotational moves, or whip pans.
+3. FORBIDDEN: Fast camera movement.
+4. REQUIRED: Heavy, grounded ARRI Alexa cinema camera on a stabilized tripod, slow linear dolly track, or weighted crane.
+5. ALLOWED CAMERA MOVES (Pick EXACTLY ONE per shot):
+   - "Static locked-off tripod shot on a heavy fluid head with subtle natural ambient vibration"
+   - "Slow, steady linear push-in on an 85mm prime lens at 0.2m/s"
+   - "Slow, steady linear pull-back on a 50mm prime lens at 0.2m/s"
+   - "Slow, level horizontal tracking dolly shot moving strictly parallel to the subject"
+   - "Slow, vertical crane boom down/up along a single steady vertical axis"
+   - "Fixed-altitude aerial straight-line tracking shot with steady, slow forward velocity"
+6. CINEMATIC PRINCIPLE: The camera is rock-solid and stable. The motion in the scene comes from the SUBJECT and ENVIRONMENT (crashing storm waves, churning slurry, swinging crane rigging, divers torquing bolts), NOT from camera acrobatics!
 
-When graphics are unnecessary, generate a normal cinematic prompt.
-When graphics are required, generate a dedicated standalone motion graphics prompt.
+====================================
+DOCUMENTARY MOTION GRAPHICS PACING & QUOTA (MAX 10-12 TOTAL, SCATTERED)
+====================================
+1. STRICT QUOTA: No more than 10-12 motion graphic scenes across the ENTIRE 50-shot project (~20% maximum).
+2. STRICT NON-CONSECUTIVE SPACING: NEVER generate two motion graphic scenes in a row. Every motion graphic MUST be followed by at least 3-4 photorealistic live-action documentary shots.
+${batchContext?.last_was_motion_graphic ? '3. CRITICAL CONSTRAINT FOR THIS BATCH: The previous shot was a motion graphic. You are STRICTLY FORBIDDEN from generating a motion graphic in this batch. You MUST generate photorealistic live-action cinematography.' : ''}
+${(batchContext?.motion_graphics_count || 0) >= 10 ? '3. CRITICAL CONSTRAINT: Maximum motion graphics quota reached (10/10). You are STRICTLY FORBIDDEN from generating any motion graphics. You MUST generate photorealistic live-action cinematography.' : ''}
+4. DEFAULT: Photorealistic live-action ARRI Alexa cinematography is the DEFAULT for all narrative beats, machinery, maintenance, divers, ports, construction shafts, and storms.
+5. MOTION GRAPHICS ARE STRICTLY RESERVED FOR:
+   - Deep-subsurface geological cross-section maps (hidden underground strata).
+   - Stylized global/regional geographic route comparison maps.
+   - Abstract internal hydrostatic pressure/stress physics diagrams.
+6. When a motion graphic is generated, it must be standalone (no photorealism, clean technical aesthetic, animated line work and depth indicators).
+7. Never mix animated graphics with photorealistic live footage in the same shot.
+
+====================================
+CLEAN NEGATIVE CONSTRAINTS FORMATTING
+====================================
+At the end of every visual prompt, append ONLY clean, concise, human-readable negative keywords:
+Format: "no fast pan, no sweeping camera, no circular motion, no dry conditions, no CGI appearance, no readable text, no military vessels, no normal atmosphere".
+NEVER include raw database keys, boolean flags (like ":true"), or code identifiers in the prompt text!
 
 ${!settings.generateImageAndAnimationPrompts ? "IMPORTANT: Generate a single, comprehensive visual_prompt. This prompt MUST describe both the visual scene AND the animation/movement/behavior within a single cohesive text block. DO NOT split them." : "IMPORTANT: Generate a visual prompt and a separate animation prompt."}
 
@@ -543,22 +570,40 @@ DIRECTOR BRAIN FORMULA:
 Before writing each prompt, silently answer: Why does this shot exist? What is the visual event? What changes? What should the viewer notice first/last? What behavior sells realism? How does the environment react? What emotion should the viewer feel?
 
 ====================================
-DOCUMENTARY MOTION GRAPHICS DIRECTOR
+GROUNDED DOCUMENTARY CAMERA RULES (STRICT CINEMATOGRAPHY)
 ====================================
-Before generating each visual beat, determine whether narration would be better explained using a dedicated documentary motion graphic instead of live-action footage.
-Never attempt to place graphics on top of footage.
-Never generate overlays.
-Never mix animated graphics with photorealistic scenes.
-If a graphic is needed, the entire prompt becomes a standalone motion graphics scene.
+Every shot MUST have EXACTLY ONE simple, linear, physically grounded camera movement (or be a locked-off static shot).
+1. FORBIDDEN: Compound multi-stage camera moves (e.g., "pans across X, then tilts to Y, then zooms into Z").
+2. FORBIDDEN: Rapid sweeping pans, 360-degree orbital arcs, swooping drone loops, fast rotational moves, or whip pans.
+3. FORBIDDEN: Fast camera movement.
+4. REQUIRED: Heavy, grounded ARRI Alexa cinema camera on a stabilized tripod, slow linear dolly track, or weighted crane.
+5. ALLOWED CAMERA MOVES (Pick EXACTLY ONE per shot):
+   - "Static locked-off tripod shot on a heavy fluid head with subtle natural ambient vibration"
+   - "Slow, steady linear push-in on an 85mm prime lens at 0.2m/s"
+   - "Slow, steady linear pull-back on a 50mm prime lens at 0.2m/s"
+   - "Slow, level horizontal tracking dolly shot moving strictly parallel to the subject"
+   - "Slow, vertical crane boom down/up along a single steady vertical axis"
+   - "Fixed-altitude aerial straight-line tracking shot with steady, slow forward velocity"
+6. CINEMATIC PRINCIPLE: The camera is rock-solid and stable. The motion in the scene comes from the SUBJECT and ENVIRONMENT, NOT from camera acrobatics!
 
-When graphics are unnecessary, generate a normal prompt.
-When graphics are required, generate a dedicated standalone motion graphics prompt.
+====================================
+DOCUMENTARY MOTION GRAPHICS PACING & QUOTA (MAX 10-12 TOTAL, SCATTERED)
+====================================
+1. STRICT QUOTA: No more than 10-12 motion graphic scenes across the entire 50-shot project (~20% maximum).
+2. STRICT NON-CONSECUTIVE SPACING: NEVER generate two motion graphic scenes in a row. Every motion graphic MUST be followed by at least 3-4 photorealistic live-action documentary shots.
+${batchContext?.last_was_motion_graphic ? '3. CRITICAL CONSTRAINT: The previous shot was a motion graphic. You are STRICTLY FORBIDDEN from generating a motion graphic in this batch. You MUST generate photorealistic live-action cinematography.' : ''}
+${(batchContext?.motion_graphics_count || 0) >= 10 ? '3. CRITICAL CONSTRAINT: Maximum motion graphics quota reached (10/10). You are STRICTLY FORBIDDEN from generating any motion graphics. You MUST generate photorealistic live-action cinematography.' : ''}
+4. DEFAULT: Photorealistic live-action cinematography is the standard.
+5. MOTION GRAPHICS ARE STRICTLY RESERVED FOR:
+   - Deep-subsurface geological cross-section maps.
+   - Stylized global/regional geographic route comparison maps.
+   - Abstract internal hydrostatic pressure/stress physics diagrams.
 
 OUTPUT RULES:
 1. JSON STRUCTURE: Output valid JSON exactly matching the schema.
 2. SCRIPT SYNC: Use the provided script line exactly. DO NOT INVENT NEXT ACTIONS.
 3. NO GENERIC TERMS: Do not say "Good lighting". Say "${settings.lighting}".
-${isJsonMode ? '4. SAFETY: negative_prompt MUST include: "text, typography, subtitles, watermarks".' : ''}`;
+${isJsonMode ? '4. SAFETY: negative_prompt MUST include: "no fast pan, no sweeping camera, no circular motion, text, typography, subtitles, watermarks".' : ''}`;
 };
 
 
@@ -789,6 +834,20 @@ const generateClipBatch = async (
       jsonOutput: isJsonMode ? clipData.jsonOutput : undefined
     }));
 
+    // Check motion graphics generated in this batch
+    const lastClip = generatedClips[generatedClips.length - 1];
+    const lastWasMotionGraphic = lastClip ? (
+      lastClip.visualPrompt.toLowerCase().includes('motion graphic') ||
+      lastClip.visualPrompt.toLowerCase().includes('cross-section map') ||
+      lastClip.visualPrompt.toLowerCase().includes('technical animation')
+    ) : false;
+
+    const newMotionGraphics = generatedClips.filter(c => 
+      c.visualPrompt.toLowerCase().includes('motion graphic') ||
+      c.visualPrompt.toLowerCase().includes('cross-section map') ||
+      c.visualPrompt.toLowerCase().includes('technical animation')
+    ).length;
+
     // Update batch context for next batch
     const updatedBatchContext: BatchContext = {
       previous_prompts_summary: [
@@ -805,7 +864,9 @@ const generateClipBatch = async (
       primary_subjects_used: [
         ...currentBatchContext.primary_subjects_used,
         ...data.map((d: any) => d.primary_subject || '').filter((s: string) => s)
-      ]
+      ],
+      motion_graphics_count: (currentBatchContext.motion_graphics_count || 0) + newMotionGraphics,
+      last_was_motion_graphic: lastWasMotionGraphic
     };
 
     return { clips: generatedClips, updatedBatchContext };

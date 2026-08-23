@@ -660,23 +660,40 @@ export const formatScenePacketForPrompt = (
   lines.push('');
 
   // NEGATIVE CONSTRAINTS (categorized, after positives)
+  const cleanList = (arr: string[]) => {
+    return arr
+      .map(item => item.replace(/:\s*true/gi, '').replace(/:\s*false/gi, '').replace(/_/g, ' ').trim())
+      .filter(item => item && !item.toLowerCase().includes('forbidden:true') && !item.toLowerCase().includes('requires verified'));
+  };
+
   lines.push('==================================');
-  lines.push('NEGATIVE CONSTRAINTS');
+  lines.push('NEGATIVE CONSTRAINTS (FORMATTED CONCISELY)');
   lines.push('==================================');
   const cats = packet.negative_constraints;
-  if (cats.geometry.length > 0) lines.push(`GEOMETRY: ${cats.geometry.join(' | ')}`);
-  if (cats.action.length > 0) lines.push(`ACTION: ${cats.action.join(' | ')}`);
-  if (cats.camera.length > 0) lines.push(`CAMERA: ${cats.camera.join(' | ')}`);
-  if (cats.environment.length > 0) lines.push(`ENVIRONMENT: ${cats.environment.join(' | ')}`);
-  if (cats.evidence.length > 0) lines.push(`EVIDENCE: ${cats.evidence.join(' | ')}`);
-  if (cats.text.length > 0) lines.push(`TEXT: ${cats.text.join(' | ')}`);
-  if (cats.security.length > 0) lines.push(`SECURITY: ${cats.security.join(' | ')}`);
+  const geom = cleanList(cats.geometry);
+  const act = cleanList(cats.action);
+  const cam = cleanList(cats.camera);
+  const env = cleanList(cats.environment);
+  const evid = cleanList(cats.evidence);
+  const txt = cleanList(cats.text);
+  const sec = cleanList(cats.security);
+
+  if (geom.length > 0) lines.push(`GEOMETRY: ${geom.join(', ')}`);
+  if (act.length > 0) lines.push(`ACTION: ${act.join(', ')}`);
+  if (cam.length > 0) lines.push(`CAMERA: ${cam.join(', ')}`);
+  if (env.length > 0) lines.push(`ENVIRONMENT: ${env.join(', ')}`);
+  if (evid.length > 0) lines.push(`EVIDENCE: ${evid.join(', ')}`);
+  if (txt.length > 0) lines.push(`TEXT: ${txt.join(', ')}`);
+  if (sec.length > 0) lines.push(`SECURITY: ${sec.join(', ')}`);
   lines.push('');
 
   // BEAT MUST NOT SHOW
   if (packet.beat.must_not_show && packet.beat.must_not_show.length > 0) {
-    lines.push(`BEAT MUST NOT SHOW: ${packet.beat.must_not_show.join(' | ')}`);
-    lines.push('');
+    const cleanedMustNot = cleanList(packet.beat.must_not_show);
+    if (cleanedMustNot.length > 0) {
+      lines.push(`BEAT MUST NOT SHOW: ${cleanedMustNot.join(', ')}`);
+      lines.push('');
+    }
   }
 
   // SOURCE REFERENCES

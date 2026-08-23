@@ -295,6 +295,8 @@ export interface BatchContext {
   temporal_state: string;
   process_stages_shown: string[];
   primary_subjects_used: string[];
+  motion_graphics_count?: number;
+  last_was_motion_graphic?: boolean;
 }
 
 export interface CompilerStatus {
