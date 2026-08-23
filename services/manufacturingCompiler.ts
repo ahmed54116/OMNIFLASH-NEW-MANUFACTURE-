@@ -28,33 +28,28 @@ const computeContentHash = (text: string): string => {
 };
 
 export const getApiKey = (): string => {
-  if (typeof process !== 'undefined' && process.env) {
-    if (process.env.API_KEY) return process.env.API_KEY;
-    if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY;
-  }
   if (typeof window !== 'undefined') {
+    const local = localStorage.getItem('veo_gemini_api_key');
+    if (local && local.trim()) return local.trim();
     const win = window as any;
     if (win.__GEMINI_API_KEY__) return win.__GEMINI_API_KEY__;
     if (win.aistudio?.apiKey) return win.aistudio.apiKey;
     if (win.process?.env?.API_KEY) return win.process.env.API_KEY;
     if (win.process?.env?.GEMINI_API_KEY) return win.process.env.GEMINI_API_KEY;
-    const local = localStorage.getItem('veo_gemini_api_key');
-    if (local) return local;
+  }
+  if (typeof process !== 'undefined' && process.env) {
+    if (process.env.API_KEY) return process.env.API_KEY;
+    if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY;
   }
   return '';
 };
 
 export const getAIClient = () => {
-  const apiKey = getApiKey() || 'AI_STUDIO_SESSION_KEY';
-  const isBrowser = typeof window !== 'undefined';
-  const origin = isBrowser ? window.location.origin : 'http://localhost:3000';
-  
-  const clientOptions: any = { apiKey };
-  // If no direct key in browser, route through the secure server proxy
-  if (!getApiKey() && isBrowser) {
-    clientOptions.baseUrl = `${origin}/api/gemini/proxy`;
+  const apiKey = getApiKey();
+  if (apiKey) {
+    return new GoogleGenAI({ apiKey });
   }
-  return new GoogleGenAI(clientOptions);
+  return new GoogleGenAI({});
 };
 
 // ============================================================
