@@ -22,7 +22,7 @@ import {
   FileText, Search, UserCheck, ArrowRight, ArrowLeft, Check, Settings 
 , Database } from 'lucide-react';
 
-const BATCH_SIZE = 2;
+const BATCH_SIZE = 5;
 const CLIP_DURATIONS: ClipDuration[] = [4, 5, 8];
 
 export const parseCustomSplitJsonToChunks = (jsonString: string): string[] => {
@@ -476,7 +476,7 @@ const App: React.FC = () => {
   };
 
   const processScriptQueue = async (startIndex: number, endIndex: number, chunks: string[]) => {
-    const BATCH_SIZE = 2;
+    const BATCH_SIZE = 5;
     // Reset batch context at the start of a full generation
     if (startIndex === 0) {
       batchContextRef.current = {
