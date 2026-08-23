@@ -18,7 +18,11 @@ async function serverPost(endpoint: string, body: any): Promise<any> {
   });
   if (!res.ok) {
     const errData = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(errData.error || `Server error ${res.status}`);
+    const error: any = new Error(errData.error || `Server error ${res.status}`);
+    error.status = res.status;
+    error.isQuotaError = errData.isQuotaError || res.status === 429;
+    error.retryDelay = errData.retryDelay || (res.status === 429 ? 60 : undefined);
+    throw error;
   }
   return res.json();
 }

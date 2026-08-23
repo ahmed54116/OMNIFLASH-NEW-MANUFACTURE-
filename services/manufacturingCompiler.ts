@@ -27,6 +27,9 @@ const computeContentHash = (text: string): string => {
   return 'MFG_' + Math.abs(hash).toString(36).toUpperCase();
 };
 
+// Configurable model — same as geminiService.ts
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+
 export const getAIClient = () => {
   return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
@@ -225,7 +228,7 @@ OUTPUT: A structured JSON matching the provided schema exactly.`;
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: GEMINI_MODEL,
       contents: `Compile the following Manufacturing JSON into a structured Reference Index.\n\nMANUFACTURING JSON:\n${rawJson}`,
       config: {
         systemInstruction,

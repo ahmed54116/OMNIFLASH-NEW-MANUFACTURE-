@@ -523,6 +523,7 @@ const App: React.FC = () => {
         setProgress(prev => ({ ...prev, current: batchEnd }));
         updateTimeRemaining(batchEnd - startIndex, endIndex - startIndex);
       } catch (err: any) {
+        setNextClipIndex(i);
         setStatus(GenerationStatus.ERROR);
         setErrorMsg(err.message || "An error occurred during generation.");
         return;
@@ -1299,9 +1300,29 @@ const App: React.FC = () => {
               </div>
 
               {errorMsg && (
-                <div className="mt-4 p-4 bg-red-900/30 border border-red-800 rounded-lg text-red-200 text-sm flex items-start gap-3">
-                  <AlertCircle className="shrink-0 mt-0.5 text-red-500" size={16} />
-                  <p>{errorMsg}</p>
+                <div className={`mt-4 p-4 rounded-lg text-sm flex items-start gap-3 border ${
+                  errorMsg.toLowerCase().includes('quota') || errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED')
+                    ? 'bg-amber-950/40 border-amber-800/80 text-amber-200'
+                    : 'bg-red-900/30 border-red-800 text-red-200'
+                }`}>
+                  <AlertCircle className={`shrink-0 mt-0.5 ${
+                    errorMsg.toLowerCase().includes('quota') || errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED')
+                      ? 'text-amber-400'
+                      : 'text-red-500'
+                  }`} size={18} />
+                  <div className="space-y-1">
+                    <p className="font-semibold">
+                      {errorMsg.toLowerCase().includes('quota') || errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED')
+                        ? 'Google Account API Quota Reached'
+                        : 'Generation Error'}
+                    </p>
+                    <p className="text-xs opacity-90">{errorMsg}</p>
+                    {clips.length > 0 && (
+                      <p className="text-xs text-emerald-400 pt-1 font-medium">
+                        ✓ All {clips.length} generated prompts are safely saved. You can retry shortly or resume from prompt #{clips.length + 1}.
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
 

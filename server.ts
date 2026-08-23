@@ -24,10 +24,38 @@ async function startServer() {
       const index = await manufacturingCompiler.compileManufacturingJson(manufacturingJson);
       res.json({ referenceIndex: index });
     } catch (e: any) {
-      console.error('API compileReference error:', e);
-      res.status(500).json({ error: e.message || 'Compilation failed' });
+      handleApiError(e, res, 'compileReference');
     }
   });
+
+  // Helper: detect quota errors and return proper status code + structured error
+  const handleApiError = (e: any, res: any, label: string) => {
+    console.error(`API ${label} error:`, e);
+    const msg = e?.message || '';
+    
+    // Check if this is a QUOTA_EXHAUSTED error from our callWithRetry
+    if (msg.startsWith('QUOTA_EXHAUSTED|')) {
+      const parts = msg.split('|');
+      return res.status(429).json({ 
+        error: parts[1] || 'Quota exceeded', 
+        retryDelay: parseInt(parts[2]) || 60,
+        isQuotaError: true 
+      });
+    }
+    
+    // Check for raw 429 / quota errors from the API
+    if (msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('Quota exceeded')) {
+      const retryMatch = msg.match(/"retryDelay"\s*:\s*"(\d+)s"/);
+      const retryDelay = retryMatch ? parseInt(retryMatch[1]) : 60;
+      return res.status(429).json({ 
+        error: `API quota exceeded. Please wait ${retryDelay}s and try again.`, 
+        retryDelay,
+        isQuotaError: true 
+      });
+    }
+    
+    res.status(500).json({ error: msg || `${label} failed` });
+  };
 
   app.post('/api/gemini/split', async (req, res) => {
     try {
@@ -35,8 +63,7 @@ async function startServer() {
       const chunks = await geminiService.splitScriptToChunks(script, clipDuration, mode);
       res.json({ chunks });
     } catch (e: any) {
-      console.error('API split error:', e);
-      res.status(500).json({ error: e.message });
+      handleApiError(e, res, 'split');
     }
   });
 
@@ -46,8 +73,7 @@ async function startServer() {
       const characters = await geminiService.analyzeTextForCharacters(text, mode);
       res.json({ characters });
     } catch (e: any) {
-      console.error('API characters error:', e);
-      res.status(500).json({ error: e.message });
+      handleApiError(e, res, 'characters');
     }
   });
 
@@ -57,8 +83,7 @@ async function startServer() {
       const clip = await geminiService.generateSingleClip(chunkText, clipNumber, settings, clipDuration, outputFormat, mode);
       res.json({ clip });
     } catch (e: any) {
-      console.error('API generateSingle error:', e);
-      res.status(500).json({ error: e.message });
+      handleApiError(e, res, 'generateSingle');
     }
   });
 
@@ -68,8 +93,7 @@ async function startServer() {
       const result = await geminiService.generateClipBatch(chunks, startClipNumber, settings, clipDuration, outputFormat, mode, batchContext);
       res.json(result);
     } catch (e: any) {
-      console.error('API generateBatch error:', e);
-      res.status(500).json({ error: e.message });
+      handleApiError(e, res, 'generateBatch');
     }
   });
 
@@ -79,8 +103,7 @@ async function startServer() {
       const clip = await geminiService.regenerateClip(originalClip, settings, instruction, outputFormat, mode);
       res.json({ clip });
     } catch (e: any) {
-      console.error('API regenerate error:', e);
-      res.status(500).json({ error: e.message });
+      handleApiError(e, res, 'regenerate');
     }
   });
 
@@ -90,8 +113,7 @@ async function startServer() {
       const continuityJson = await geminiService.analyzeContinuity(script, settings);
       res.json({ continuityJson });
     } catch (e: any) {
-      console.error('API continuity error:', e);
-      res.status(500).json({ error: e.message });
+      handleApiError(e, res, 'continuity');
     }
   });
 

@@ -9,8 +9,109 @@ import {
 } from '../constants';
 import { manufacturingCompiler } from './manufacturingCompiler';
 
+// ============================================================
+// CONFIGURABLE MODEL — Change via GEMINI_MODEL env var or here
+// ============================================================
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+
 export const getAIClient = () => {
   return new GoogleGenAI({ apiKey: process.env.API_KEY });
+};
+
+// ============================================================
+// SMART RETRY WITH EXPONENTIAL BACKOFF
+// Handles 429 RESOURCE_EXHAUSTED by parsing retryDelay from error
+// ============================================================
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Inter-batch cooldown to avoid RPM throttling (3 seconds between batches)
+const INTER_BATCH_DELAY_MS = 3000;
+
+/**
+ * Extract retryDelay (in seconds) from a Gemini 429 error.
+ * The API returns: {"error":{"code":429,...,"details":[...,{"retryDelay":"58s"}]}}
+ */
+const extractRetryDelay = (error: any): number | null => {
+  try {
+    const msg = error?.message || error?.toString() || '';
+    // Try to parse retryDelay from the error message/details
+    const retryMatch = msg.match(/"retryDelay"\s*:\s*"(\d+)s"/);
+    if (retryMatch) return parseInt(retryMatch[1], 10);
+    // Also check for structured error
+    if (error?.details) {
+      for (const detail of error.details) {
+        if (detail?.retryDelay) {
+          const secs = parseInt(detail.retryDelay.replace('s', ''), 10);
+          if (!isNaN(secs)) return secs;
+        }
+      }
+    }
+    return null;
+  } catch { return null; }
+};
+
+/**
+ * Check if an error is a 429 / RESOURCE_EXHAUSTED quota error.
+ */
+const isQuotaError = (error: any): boolean => {
+  const msg = error?.message || error?.toString() || '';
+  return msg.includes('429') || 
+         msg.includes('RESOURCE_EXHAUSTED') || 
+         msg.includes('quota') ||
+         msg.includes('rate') ||
+         msg.includes('Quota exceeded');
+};
+
+/**
+ * Wraps a Gemini API call with exponential backoff retry.
+ * - For quota (429) errors: waits the server-specified retryDelay, up to 3 retries
+ * - For other errors: retries up to 2 times with 5s/15s backoff
+ * - Throws a clean, user-friendly error when retries are exhausted
+ */
+const callWithRetry = async <T>(
+  fn: () => Promise<T>,
+  label: string = 'API call',
+  maxRetries: number = 3
+): Promise<T> => {
+  const backoffDelays = [5000, 15000, 45000]; // 5s, 15s, 45s
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      const isLastAttempt = attempt === maxRetries;
+      
+      if (isQuotaError(error)) {
+        const serverDelay = extractRetryDelay(error);
+        
+        if (isLastAttempt) {
+          // Build a clean error message for the client
+          const delayHint = serverDelay ? ` Server suggests retry in ${serverDelay}s.` : '';
+          throw new Error(
+            `QUOTA_EXHAUSTED|Gemini API quota exceeded after ${maxRetries + 1} attempts.${delayHint}|${serverDelay || 60}`
+          );
+        }
+        
+        // Wait the server-specified delay, or use exponential backoff
+        const waitMs = serverDelay 
+          ? serverDelay * 1000 
+          : backoffDelays[Math.min(attempt, backoffDelays.length - 1)];
+        
+        console.warn(`[${label}] Quota error (attempt ${attempt + 1}/${maxRetries + 1}). Waiting ${Math.round(waitMs / 1000)}s before retry...`);
+        await sleep(waitMs);
+      } else {
+        // Non-quota error — fewer retries, shorter backoff
+        if (isLastAttempt || attempt >= 1) {
+          throw error; // Give up after 2 attempts for non-quota errors
+        }
+        const waitMs = backoffDelays[0]; // 5s
+        console.warn(`[${label}] Error (attempt ${attempt + 1}): ${error.message}. Retrying in ${waitMs / 1000}s...`);
+        await sleep(waitMs);
+      }
+    }
+  }
+  
+  throw new Error(`${label} failed after all retry attempts.`);
 };
 
 // ============================================================
@@ -53,8 +154,8 @@ RULES:
 7. Return ONLY a JSON array of strings. Do not use markdown wrappers.`;
 
   try {
-     const response = await ai.models.generateContent({
-       model: "gemini-2.5-flash", 
+     const response = await callWithRetry(() => ai.models.generateContent({
+       model: GEMINI_MODEL, 
        contents: `Split this script into chunks according to the rules:\n\n${script}`,
        config: {
          systemInstruction,
@@ -64,7 +165,7 @@ RULES:
            items: { type: Type.STRING }
          }
        }
-     });
+     }), 'splitScript');
      
      const jsonStr = response.text;
      if (!jsonStr) throw new Error("Empty response");
@@ -86,7 +187,7 @@ const analyzeVideoStyle = async (imageBase64: string, mimeType: string): Promise
   
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: GEMINI_MODEL,
       contents: {
         parts: [
           { inlineData: { mimeType: mimeType, data: imageBase64 } },
@@ -139,7 +240,7 @@ const analyzeCharacterImage = async (imageBase64: string, mimeType: string): Pro
   
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: GEMINI_MODEL,
       contents: {
         parts: [
           { inlineData: { mimeType: mimeType, data: imageBase64 } },
@@ -168,7 +269,7 @@ const deepSearchCharacterAppearance = async (characterName: string): Promise<str
   const systemInstruction = `You are an elite Character Concept Artist and Medical/Historical Archivist. The user will provide a specific character, person, or historical figure name. Your task is to conduct a deep search and generate a highly detailed, comprehensive JSON object describing their EXACT physical appearance, clothing, and distinctive features based on historical records, clinical findings, or established canon. Output valid JSON ONLY.`;
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: GEMINI_MODEL,
       contents: `Provide a highly detailed physical and visual breakdown for: ${characterName}`,
       config: {
         systemInstruction,
@@ -196,7 +297,7 @@ const analyzeTextForCharacters = async (text: string, mode: 'standard' | 'creatu
   const systemInstruction = `You are an elite Character/Subject Consistency parser. The user will provide a text which could be a raw script, documentary bible, lore, or a raw JSON object/array. Extract all recurring characters, wildlife species, or key subjects into a strict JSON array matching the schema. If the input is a complex JSON (like a documentary build/bible), specifically look for 'creature_design_master', 'character_profiles', or similar sections and map them directly into this schema accurately and efficiently. Capture their physical descriptions, visual styles, and characteristics accurately. Ensure you extract the primary subject (e.g. Dunkleosteus, wolves, protagonist) as a character so the consistency engine can track them.`;
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: GEMINI_MODEL,
       contents: text,
       config: {
         systemInstruction,
@@ -238,7 +339,7 @@ const smartParseConfig = async (text: string): Promise<any> => {
   const systemInstruction = `Extract any style override configuration from the text as a JSON object matching the visual style parameters.`;
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: GEMINI_MODEL,
       contents: text,
       config: {
         systemInstruction,
@@ -663,30 +764,17 @@ const generateSingleClip = async (
   }
 
   try {
-    let response;
-    try {
-      response = await ai.models.generateContent({
-        model: "gemini-2.5-flash", 
-        contents: `Generate Prompt for Clip #${clipNumber}. Script Segment: "${chunkText}"\n\n${!settings.generateImageAndAnimationPrompts ? "IMPORTANT: Generate a single, comprehensive visual_prompt. This prompt MUST describe both the visual scene AND the animation/movement/behavior within a single cohesive text block. DO NOT split them into separate prompts." : "IMPORTANT: Generate a visual prompt and a separate animation prompt."}`,
-        config: {
-          systemInstruction,
-          responseMimeType: "application/json",
-          responseSchema: detailedJsonSchema
-        }
-      });
-    } catch (singleErr: any) {
-      console.warn(`Initial single clip generation failed for clip ${clipNumber}, retrying in 2s...`, singleErr);
-      await new Promise(res => setTimeout(res, 2000));
-      response = await ai.models.generateContent({
-        model: "gemini-2.5-flash", 
-        contents: `Generate Prompt for Clip #${clipNumber}. Script Segment: "${chunkText}"\n\n${!settings.generateImageAndAnimationPrompts ? "IMPORTANT: Generate a single, comprehensive visual_prompt. This prompt MUST describe both the visual scene AND the animation/movement/behavior within a single cohesive text block. DO NOT split them into separate prompts." : "IMPORTANT: Generate a visual prompt and a separate animation prompt."}`,
-        config: {
-          systemInstruction,
-          responseMimeType: "application/json",
-          responseSchema: detailedJsonSchema
-        }
-      });
-    }
+    const contents = `Generate Prompt for Clip #${clipNumber}. Script Segment: "${chunkText}"\n\n${!settings.generateImageAndAnimationPrompts ? "IMPORTANT: Generate a single, comprehensive visual_prompt. This prompt MUST describe both the visual scene AND the animation/movement/behavior within a single cohesive text block. DO NOT split them into separate prompts." : "IMPORTANT: Generate a visual prompt and a separate animation prompt."}`;
+    
+    const response = await callWithRetry(() => ai.models.generateContent({
+      model: GEMINI_MODEL, 
+      contents,
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json",
+        responseSchema: detailedJsonSchema
+      }
+    }), `generateClip_${clipNumber}`);
 
     const jsonStr = response.text;
     if (!jsonStr) throw new Error("Empty response from AI");
@@ -801,33 +889,19 @@ const generateClipBatch = async (
   // Add input chunks to contents
   const contents = `INPUT SCRIPT CHUNKS:\n${inputData}\n\nFor each clip, return its details matching the required schema. Ensure the array length is exactly ${chunks.length}.`;
 
-  let response;
-  try {
-    response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents,
-      config: {
-        systemInstruction,
-        responseMimeType: "application/json",
-        responseSchema: batchSchema,
-        temperature: 0.7,
-      }
-    });
-  } catch (apiErr: any) {
-    console.warn("Primary batch generation attempt failed, retrying once in 2s...", apiErr);
-    // Short backoff retry if rate limited or temporarily overloaded
-    await new Promise(res => setTimeout(res, 2000));
-    response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents,
-      config: {
-        systemInstruction,
-        responseMimeType: "application/json",
-        responseSchema: batchSchema,
-        temperature: 0.7,
-      }
-    });
-  }
+  // Inter-batch cooldown to avoid RPM throttling
+  await sleep(INTER_BATCH_DELAY_MS);
+
+  const response = await callWithRetry(() => ai.models.generateContent({
+    model: GEMINI_MODEL,
+    contents,
+    config: {
+      systemInstruction,
+      responseMimeType: "application/json",
+      responseSchema: batchSchema,
+      temperature: 0.7,
+    }
+  }), `generateBatch_${startClipNumber}`);
 
   try {
     const data = JSON.parse(response.text || '[]');
@@ -936,28 +1010,16 @@ const regenerateClip = async (
   }
 
   try {
-    let response;
-    try {
-      response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: `Regenerate this clip's JSON with instruction: "${instruction}". Original Script: "${originalClip.scriptLine}"`,
-        config: {
-          systemInstruction,
-          responseMimeType: "application/json"
-        }
-      });
-    } catch (regenErr: any) {
-      console.warn(`Initial regeneration failed for clip ${originalClip.clipNumber}, retrying in 2s...`, regenErr);
-      await new Promise(res => setTimeout(res, 2000));
-      response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: `Regenerate this clip's JSON with instruction: "${instruction}". Original Script: "${originalClip.scriptLine}"`,
-        config: {
-          systemInstruction,
-          responseMimeType: "application/json"
-        }
-      });
-    }
+    const regenContents = `Regenerate this clip's JSON with instruction: "${instruction}". Original Script: "${originalClip.scriptLine}"`;
+    
+    const response = await callWithRetry(() => ai.models.generateContent({
+      model: GEMINI_MODEL,
+      contents: regenContents,
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json"
+      }
+    }), `regenerateClip_${originalClip.clipNumber}`);
     
     const jsonStr = response.text;
     if (!jsonStr) throw new Error("Empty response from AI");
@@ -1021,14 +1083,14 @@ const analyzeContinuity = async (script: string, settings: StyleSettings): Promi
 "Output ONLY valid JSON representing the Continuity JSON. Do not include markdown formatting like ```json.";
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+    const response = await callWithRetry(() => ai.models.generateContent({
+      model: GEMINI_MODEL,
       contents: "Script:\n" + script + "\n\nCharacter Context:\n" + characterContext + "\n\nStyle Context:\n" + styleContext + "\n\nGenerate the Continuity JSON.",
       config: {
         systemInstruction: systemInstruction,
         responseMimeType: "application/json"
       }
-    });
+    }), 'analyzeContinuity');
 
     const jsonStr = response.text;
     if (!jsonStr) throw new Error("Empty response from AI");
