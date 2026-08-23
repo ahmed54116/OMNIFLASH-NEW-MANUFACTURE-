@@ -1,0 +1,6 @@
+{
+  "name": "App for omniflash wildlife",
+  "description": "Transform video scripts into elite, safe, and structured AI video generation prompts with automatic timing calculations and video style analysis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
