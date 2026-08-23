@@ -248,31 +248,174 @@ const App: React.FC = () => {
   };
 
   const handleExportProject = () => {
-    const data = { script, settings, clips, clipDuration, outputFormat, compiledReference: compilerStatus.referenceIndex };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const compiledRef = compilerStatus.referenceIndex || settings.compiledReference || null;
+    const projectData = {
+      version: '2.0',
+      exportedAt: new Date().toISOString(),
+      script,
+      customSplitJson,
+      scriptChunks: scriptChunks.length > 0 ? scriptChunks : clips.map(c => c.scriptLine),
+      clipDuration,
+      outputFormat,
+      currentStep,
+      nextClipIndex: clips.length,
+      batchContext: batchContextRef.current,
+      settings: {
+        ...settings,
+        manufacturingJson: settings.manufacturingJson || '',
+        compiledReference: compiledRef
+      },
+      compiledReference: compiledRef,
+      compilerStatus: {
+        state: compilerStatus.state,
+        message: compilerStatus.message,
+        referenceIndex: compiledRef
+      },
+      clips
+    };
+    const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `veo_project_${new Date().toISOString().slice(0, 10)}.json`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    a.href = url;
+    a.download = `omniflash_project_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setShowToast("Project exported successfully!");
   };
 
   const handleImportProject = (data: any) => {
-    
-    if (data.script) setScript(data.script);
-    if (data.settings) { const s = data.settings; if (!s.colorPalette) s.colorPalette = { primary: '', secondary: '', accent: '' }; if (!s.characters) s.characters = []; setSettings(s); }
-    if (data.clips) setClips(data.clips);
-    if (data.clipDuration) setClipDuration(data.clipDuration);
-    if (data.outputFormat) setOutputFormat(data.outputFormat);
-    // Restore compiled reference if present in export
-    if (data.compiledReference) {
-      setCompilerStatus({ state: 'compiled', message: `Imported compiled reference`, referenceIndex: data.compiledReference });
-      setSettings(prev => ({ ...prev, compiledReference: data.compiledReference }));
+    if (typeof data === 'string') {
+      try {
+        data = JSON.parse(data);
+      } catch (e) {
+        console.error("Failed to parse JSON string:", e);
+      }
     }
-    setStatus(GenerationStatus.IDLE); setNextClipIndex(data.clips?.length || 0);
+
+    if (!data || typeof data !== 'object') {
+      setShowToast("Invalid project data.");
+      return;
+    }
+
+    // 1. Restore script & Custom JSON
+    if (data.script) {
+      setScript(data.script);
+      storage.setItem('veo_main_script', data.script);
+    }
+    if (data.customSplitJson) {
+      setCustomSplitJson(data.customSplitJson);
+      storage.setItem('veo_main_customSplitJson', data.customSplitJson);
+    }
+    
+    // 2. Restore or reconstruct script chunks
+    let restoredChunks: string[] = [];
+    if (Array.isArray(data.scriptChunks) && data.scriptChunks.length > 0) {
+      restoredChunks = data.scriptChunks;
+    } else if (data.customSplitJson && data.customSplitJson.trim()) {
+      try {
+        let parsed = JSON.parse(data.customSplitJson);
+        if (parsed && typeof parsed === 'object' && Array.isArray(parsed.segments)) {
+          parsed = parsed.segments;
+        }
+        if (Array.isArray(parsed)) {
+          restoredChunks = parsed.map((item: any) => {
+            if (typeof item === 'string') return item;
+            const text = item.text || item.script || item.chunk || item.line || item.content;
+            if (!text) return JSON.stringify(item);
+            const timestamp = item.timestamp ?? item.start ?? item.time;
+            return timestamp !== undefined ? `[${timestamp}] ${text}` : text;
+          });
+        }
+      } catch (e) {}
+    } else if (Array.isArray(data.clips) && data.clips.length > 0) {
+      restoredChunks = data.clips.map((c: any) => c.scriptLine || c.narrativeContext || '');
+    }
+
+    if (restoredChunks.length > 0) {
+      setScriptChunks(restoredChunks);
+      setIsAnalysisComplete(true);
+    }
+
+    // 3. Restore settings (Manufacturing JSON, Characters, World, Continuity, Style, etc.)
+    if (data.settings) {
+      const s = { ...data.settings };
+      if (!s.colorPalette) s.colorPalette = { primary: '', secondary: '', accent: '' };
+      if (!s.characters) s.characters = [];
+      setSettings(s);
+      storage.setItem('veo_main_settings', JSON.stringify(s));
+    }
+
+    // 4. Restore Compiled Reference & Compiler Status
+    const compiledRef = data.compiledReference || data.compilerStatus?.referenceIndex || data.settings?.compiledReference;
+    if (compiledRef) {
+      setCompilerStatus({
+        state: 'compiled',
+        message: `Imported compiled reference (${compiledRef.construction_stages?.length || 0} stages, ${compiledRef.visual_beats?.length || 0} beats, ${compiledRef.facility_modules?.length || 0} modules)`,
+        referenceIndex: compiledRef
+      });
+      setSettings(prev => ({ ...prev, compiledReference: compiledRef }));
+      storage.setItem('veo_main_compiledReference', JSON.stringify(compiledRef));
+    } else if (data.settings?.manufacturingJson) {
+      setCompilerStatus({
+        state: 'idle',
+        message: 'Manufacturing JSON imported. Ready to compile.',
+        referenceIndex: null
+      });
+    }
+
+    // 5. Restore clips & generation state
+    const importedClips: GeneratedClip[] = Array.isArray(data.clips) ? data.clips : [];
+    setClips(importedClips);
+    storage.setItem('veo_main_clips', JSON.stringify(importedClips));
+    
+    const totalCount = restoredChunks.length || importedClips.length || metrics.estimatedClipCount;
+    setNextClipIndex(importedClips.length);
+    setProgress({
+      current: importedClips.length,
+      total: totalCount,
+      currentStep: importedClips.length < totalCount 
+        ? `Loaded ${importedClips.length}/${totalCount} prompts. Ready to resume from prompt #${importedClips.length + 1}.` 
+        : `Loaded all ${importedClips.length} completed prompts.`
+    });
+
+    // 6. Restore batch context
+    if (data.batchContext) {
+      batchContextRef.current = data.batchContext;
+    } else if (importedClips.length > 0) {
+      batchContextRef.current = {
+        previous_prompts_summary: importedClips.map((c: any) => (c.visualPrompt || '').substring(0, 80) + '...'),
+        visual_vocabulary_history: [],
+        establishing_shots_registry: [],
+        temporal_state: 'Resumed',
+        process_stages_shown: [],
+        primary_subjects_used: [],
+        motion_graphics_count: importedClips.filter((c: any) => (c.visualPrompt || '').toLowerCase().includes('motion graphic')).length,
+        last_was_motion_graphic: (importedClips[importedClips.length - 1]?.visualPrompt || '').toLowerCase().includes('motion graphic')
+      };
+    }
+
+    // 7. Configs
+    if (data.clipDuration) {
+      setClipDuration(data.clipDuration);
+      storage.setItem('veo_main_clipDuration', String(data.clipDuration));
+    }
+    if (data.outputFormat) {
+      setOutputFormat(data.outputFormat);
+      storage.setItem('veo_main_outputFormat', data.outputFormat);
+    }
     setHasAnalyzedCast(data.settings?.characters?.length > 0);
+
+    // 8. Navigation Step
+    if (data.currentStep) {
+      setCurrentStep(data.currentStep);
+    } else if (importedClips.length > 0) {
+      setCurrentStep(2);
+    }
+
+    setStatus(GenerationStatus.IDLE);
     setIsImportModalOpen(false);
-    setShowToast("Project imported successfully!");
-    if (data.clips?.length > 0) setCurrentStep(2);
+    setShowToast(`Project imported! Loaded ${importedClips.length} prompts.`);
   };
 
   const startSessionTracking = () => { sessionStartTimeRef.current = Date.now(); };
@@ -479,12 +622,37 @@ const App: React.FC = () => {
     setStatus(GenerationStatus.PREPARING);
     stopGenerationRef.current = false;
     startSessionTracking();
+    
+    let chunksToUse = scriptChunks;
+    if (chunksToUse.length === 0) {
+      if (customSplitJson.trim()) {
+        try {
+          let parsed = JSON.parse(customSplitJson);
+          if (parsed && typeof parsed === 'object' && Array.isArray(parsed.segments)) parsed = parsed.segments;
+          if (Array.isArray(parsed)) {
+            chunksToUse = parsed.map((item: any) => {
+              if (typeof item === 'string') return item;
+              const text = item.text || item.script || item.chunk || item.line || item.content;
+              if (!text) return JSON.stringify(item);
+              const timestamp = item.timestamp ?? item.start ?? item.time;
+              return timestamp !== undefined ? `[${timestamp}] ${text}` : text;
+            });
+          }
+        } catch (e) {}
+      } else if (script.trim()) {
+        chunksToUse = await geminiService.splitScriptToChunks(script, clipDuration, 'standard');
+      }
+      if (chunksToUse.length > 0) {
+        setScriptChunks(chunksToUse);
+      }
+    }
+
     const startIndex = clips.length;
+    const targetEnd = chunksToUse.length > 0 ? chunksToUse.length : metrics.estimatedClipCount;
     setNextClipIndex(startIndex);
-    setProgress({ current: startIndex, total: scriptChunks.length, currentStep: `Resuming from Clip ${startIndex + 1}...` });
-    const targetEnd = scriptChunks.length;
+    setProgress({ current: startIndex, total: targetEnd, currentStep: `Resuming from Prompt #${startIndex + 1}...` });
     setStatus(GenerationStatus.GENERATING);
-    await processScriptQueue(startIndex, targetEnd, scriptChunks);
+    await processScriptQueue(startIndex, targetEnd, chunksToUse);
   };
 
   const handleRetry = async () => {
@@ -521,12 +689,28 @@ const App: React.FC = () => {
   };
 
   const renderMainButton = () => {
+    const totalChunks = scriptChunks.length || parsedCustomChunksLength || metrics.estimatedClipCount;
+    const isPartiallyComplete = clips.length > 0 && totalChunks > clips.length;
+
     if (clips.length > 0) {
       return (
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-3">
+          {isPartiallyComplete && status === GenerationStatus.IDLE && (
+            <button
+              onClick={handleResume}
+              className="flex-1 py-4 rounded-lg flex items-center justify-center gap-2 font-bold text-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-xl shadow-emerald-900/50 hover:shadow-emerald-700/50 transition-all transform active:scale-95"
+            >
+              <Play fill="currentColor" size={20} /> CONTINUE FROM PROMPT #{clips.length + 1} OF {totalChunks}
+            </button>
+          )}
+
           <button
             onClick={handleInitialGenerate}
-            className="flex-1 py-4 rounded-lg flex items-center justify-center gap-2 font-bold text-lg bg-red-600 hover:bg-red-500 text-white shadow-xl shadow-red-900/50 hover:shadow-red-700/50 transition-all transform active:scale-95"
+            className={`py-4 px-6 rounded-lg flex items-center justify-center gap-2 font-bold text-lg text-white shadow-xl transition-all transform active:scale-95 ${
+              isPartiallyComplete && status === GenerationStatus.IDLE 
+                ? 'bg-gray-700 hover:bg-gray-600 border border-gray-600' 
+                : 'flex-1 bg-red-600 hover:bg-red-500 shadow-red-900/50'
+            }`}
           >
             {status === GenerationStatus.GENERATING ? (
               <><Loader2 className="animate-spin" size={20} /> GENERATING...</>
@@ -534,8 +718,10 @@ const App: React.FC = () => {
               <><RotateCcw size={20} /> RETRY GENERATION</>
             ) : status === GenerationStatus.PAUSED ? (
               <><Play size={20} /> RESUME GENERATION</>
+            ) : isPartiallyComplete ? (
+              <><RotateCcw size={18} /> RESTART FROM #1</>
             ) : (
-              <><Play size={20} /> REGENERATE ALL</>
+              <><RotateCcw size={20} /> REGENERATE ALL</>
             )}
           </button>
           
@@ -1091,23 +1277,30 @@ const App: React.FC = () => {
                   {status === GenerationStatus.GENERATING || status === GenerationStatus.PREPARING ? (
                     <button
                       onClick={handlePause}
-                      className="w-full py-2 bg-yellow-600 hover:bg-yellow-500 text-white font-bold rounded-lg transition-all flex items-center justify-center gap-2"
+                      className="w-full py-2.5 bg-yellow-600 hover:bg-yellow-500 text-white font-bold rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg"
                     >
                       <Pause size={16} /> Pause Generation
                     </button>
                   ) : status === GenerationStatus.PAUSED ? (
                     <button
                       onClick={handleResume}
-                      className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-all flex items-center justify-center gap-2"
+                      className="w-full py-2.5 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg"
                     >
-                      <Play size={16} /> Resume Generation
+                      <Play size={16} fill="currentColor" /> Resume Generation
                     </button>
                   ) : status === GenerationStatus.ERROR ? (
                     <button
                       onClick={handleRetry}
-                      className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-all flex items-center justify-center gap-2"
+                      className="w-full py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg"
                     >
                       <RotateCcw size={16} /> Retry Failed Clip
+                    </button>
+                  ) : (clips.length > 0 && (scriptChunks.length > clips.length || (scriptChunks.length === 0 && metrics.estimatedClipCount > clips.length))) ? (
+                    <button
+                      onClick={handleResume}
+                      className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/40 transform hover:scale-[1.02]"
+                    >
+                      <Play size={16} fill="currentColor" /> Continue from Prompt #{clips.length + 1} of {scriptChunks.length || metrics.estimatedClipCount}
                     </button>
                   ) : null}
 
