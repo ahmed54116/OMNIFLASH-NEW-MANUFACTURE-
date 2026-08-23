@@ -6,11 +6,6 @@ import { dirname } from 'path';
 import { createServer as createViteServer } from 'vite';
 import 'dotenv/config';
 
-// Ensure API_KEY is available (Platform provides it as API_KEY or GEMINI_API_KEY)
-if (process.env.GEMINI_API_KEY && !process.env.API_KEY) {
-  process.env.API_KEY = process.env.GEMINI_API_KEY;
-}
-
 import { geminiService } from './services/geminiService.js';
 import { manufacturingCompiler } from './services/manufacturingCompiler.js';
 
