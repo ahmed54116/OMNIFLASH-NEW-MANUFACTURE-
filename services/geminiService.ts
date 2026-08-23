@@ -385,8 +385,29 @@ REQUIRED PROMPT STRUCTURE (Follow EXACTLY in order):
 9. VISUAL PROGRESSION: The shot should evolve. Something changes. Beginning → Middle → End.
 10. VIEWER PERSPECTIVE: Tell the generator what the shot should feel like.
 11. ENDING STATE: A natural destination for the frame.
-12. DOCUMENTARY STYLE: Short tag at end: "filmed on ARRI Alexa 65, industrial documentary realism, no artificial CGI appearance".
+12. DOCUMENTARY STYLE: Short tag at end: "photorealistic 35mm optical cinematography, natural film grain, authentic industrial realism, no CGI appearance, clean live-action frame without on-screen graphics".
 13. NEGATIVE CONSTRAINTS: Always last.
+
+====================================
+ZERO ON-SCREEN TEXT & CLEAN FRAME RULE (CRITICAL)
+====================================
+1. CAMERA BRAND & MODEL NAMES BANNED: NEVER include camera brand names, camera model numbers, or trademark words in the prompt (e.g. NEVER write "ARRI", "Alexa 65", "RED", "Sony FX9", "IMAX"). Video generation models misinterpret these keywords as camera HUD overlays and render camera watermarks, logos, and telemetry directly onto the video frames!
+   - INSTEAD USE: "photorealistic 35mm optical cinematography, natural film grain, authentic industrial realism, no CGI appearance, clean live-action frame without on-screen graphics".
+
+2. RAW TELEMETRY & MEASUREMENT STRINGS BANNED: NEVER output raw technical dimension syntax, slashes, or unit codes in the prompt body (e.g. NEVER write "14.57m / 90r110/5", "8.5 bar", "191 MPa", "92m", "Light 100t", "4.5 0km"). AI video models misinterpret these strings as on-screen text, subtitles, and telemetry HUD overlays!
+   - ALWAYS TRANSLATE NUMBERS INTO NATURAL VISUAL PROSE:
+     * Instead of "14.57m diameter cutterhead" -> "colossal four-story-tall circular steel cutter head"
+     * Instead of "92m depth below sea" -> "deep seabed cavern floor beneath murky ocean waters"
+     * Instead of "8.5 bar pressure" -> "extreme hydrostatic water pressure with dense swirling sediment"
+     * Instead of "191 MPa rock" -> "unyielding solid granite rock face"
+     * Instead of "100t crane" -> "massive heavy-duty industrial gantry crane"
+     * Instead of "The Yongzhou / Dinghai TBMs" -> "the colossal Yongzhou undersea tunnel boring machine"
+
+3. LIVE-ACTION CINEMATOGRAPHY PURITY: Every live-action shot must be 100% clean cinematic footage with ZERO on-screen text, ZERO subtitles, ZERO watermarks, ZERO logos, and ZERO HUD telemetry.
+
+4. MANDATORY NEGATIVE KEYWORDS AT END OF EVERY PROMPT:
+   Every visual prompt MUST end with:
+   "NEGATIVE: no text, no letters, no numbers, no words, no subtitles, no captions, no typography, no watermarks, no logos, no HUD, no UI overlays, no telemetry, no camera labels, no technical readouts, no on-screen graphics, no branding, clean live-action frame."
 
 CRITICAL DIAGNOSTIC RULES FOR PROMPT GENERATION (ALL 22 MANDATORY):
 1. TOPIC & NARRATION AWARE: For every shot, determine what exact statement, event, object, process, or consequence the narration is proving.
@@ -563,8 +584,23 @@ REQUIRED PROMPT STRUCTURE (Follow EXACTLY in order):
 9. VISUAL PROGRESSION: The shot should evolve. Something changes.
 10. VIEWER PERSPECTIVE: Tell the generator what the shot should feel like.
 11. ENDING STATE: A natural destination for the frame.
-12. DOCUMENTARY STYLE: "filmed on ARRI Alexa 65, visually indistinguishable from genuine documentary footage, no artificial CGI appearance".
+12. DOCUMENTARY STYLE: "photorealistic 35mm optical cinematography, natural film grain, authentic documentary realism, clean frame without on-screen graphics or text, no artificial CGI appearance".
 13. NEGATIVE CONSTRAINTS: Always last.
+
+====================================
+ZERO ON-SCREEN TEXT & CLEAN FRAME RULE (CRITICAL)
+====================================
+1. CAMERA BRAND & MODEL NAMES BANNED: NEVER include camera brand names or model codes (e.g. NEVER write "ARRI", "Alexa 65", "RED", "Sony", "IMAX"). Video generation models treat these as prompt watermarks and render logos and HUD timecodes directly onto the video frames!
+   - INSTEAD USE: "photorealistic 35mm optical cinematography, natural film grain, authentic documentary realism, no CGI appearance, clean live-action frame without on-screen graphics".
+
+2. RAW TELEMETRY & MEASUREMENT STRINGS BANNED: NEVER output raw technical dimension syntax, slashes, or unit codes in the prompt body (e.g. NEVER write "14.57m / 90r110/5", "8.5 bar", "191 MPa", "92m", "Light 100t"). AI video models misinterpret these strings as on-screen text, subtitles, and telemetry HUD overlays!
+   - ALWAYS TRANSLATE NUMBERS INTO NATURAL VISUAL PROSE: Describe physical visual scale instead of raw metric readouts.
+
+3. LIVE-ACTION CINEMATOGRAPHY PURITY: Every live-action shot must be 100% clean cinematic footage with ZERO on-screen text, ZERO subtitles, ZERO watermarks, ZERO logos, and ZERO HUD telemetry.
+
+4. MANDATORY NEGATIVE KEYWORDS AT END OF EVERY PROMPT:
+   Every visual prompt MUST end with:
+   "NEGATIVE: no text, no letters, no numbers, no words, no subtitles, no captions, no typography, no watermarks, no logos, no HUD, no UI overlays, no telemetry, no camera labels, no technical readouts, no on-screen graphics, no branding, clean live-action frame."
 
 DIRECTOR BRAIN FORMULA:
 Before writing each prompt, silently answer: Why does this shot exist? What is the visual event? What changes? What should the viewer notice first/last? What behavior sells realism? How does the environment react? What emotion should the viewer feel?
@@ -603,7 +639,7 @@ OUTPUT RULES:
 1. JSON STRUCTURE: Output valid JSON exactly matching the schema.
 2. SCRIPT SYNC: Use the provided script line exactly. DO NOT INVENT NEXT ACTIONS.
 3. NO GENERIC TERMS: Do not say "Good lighting". Say "${settings.lighting}".
-${isJsonMode ? '4. SAFETY: negative_prompt MUST include: "no fast pan, no sweeping camera, no circular motion, text, typography, subtitles, watermarks".' : ''}`;
+${isJsonMode ? '4. SAFETY: negative_prompt MUST include: "no text, no letters, no numbers, no subtitles, no captions, no typography, no watermarks, no logos, no HUD, no UI overlays, no telemetry, no fast pan, no sweeping camera, no circular motion".' : ''}`;
 };
 
 

@@ -589,9 +589,6 @@ export const formatScenePacketForPrompt = (
     } else {
       lines.push(`[${mod.reference_id}] ${mod.identity_anchor || mod.name}`);
     }
-    if (mod.key_dimensions.length > 0) {
-      lines.push(`  Dimensions: ${mod.key_dimensions.join(', ')}`);
-    }
   }
   lines.push('');
 
